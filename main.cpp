@@ -1,5 +1,6 @@
 #define CROW_DISABLE_BOOST
 #include "crow_all.h"
+
 #include <vector>
 #include <list>
 #include <string>
@@ -62,10 +63,9 @@ int main() {
     crow::SimpleApp app;
 
     CROW_ROUTE(app, "/")([](){
-    return "Backend is running!";
-});
+        return "Backend is running!";
+    });
 
-    // Add Item API
     CROW_ROUTE(app, "/add")
     ([&](const crow::request& req){
         auto x = crow::json::load(req.body);
@@ -82,7 +82,6 @@ int main() {
         return crow::response("Item added successfully");
     });
 
-    // Get All Items
     CROW_ROUTE(app, "/items")
     ([]{
         auto items = tracker.getAll();
@@ -99,7 +98,7 @@ int main() {
         }
         return result;
     });
-    // Search by ID
+
     CROW_ROUTE(app, "/search/<int>")
     ([](int id){
         auto results = tracker.searchById(id);
@@ -116,18 +115,10 @@ int main() {
         }
         return result;
     });
-    
 
-    // ✅ Render compatible PORT handling
-    const char* portEnv = getenv("PORT");
-    int port = portEnv ? stoi(portEnv) : 8080;
+    // ✅ SINGLE, CORRECT, CLOUD-SAFE PORT HANDLING
+    const char* portEnv = std::getenv("PORT");
+    int port = portEnv ? std::stoi(portEnv) : 8080;
 
-const char* portEnv = std::getenv("PORT");
-int port = portEnv ? std::stoi(portEnv) : 8080;
-
-app.port(port).multithreaded().run();
-
-
-app.port(port).multithreaded().run();
+    app.port(port).multithreaded().run();
 }
-

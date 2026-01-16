@@ -122,10 +122,12 @@ int main() {
     const char* portEnv = getenv("PORT");
     int port = portEnv ? stoi(portEnv) : 8080;
 
-int port = 8080;
-if (const char* p = std::getenv("PORT")) {
-    port = std::stoi(p);
-}
+const char* portEnv = std::getenv("PORT");
+int port = portEnv ? std::stoi(portEnv) : 8080;
+
+app.port(port).multithreaded().run();
+
 
 app.port(port).multithreaded().run();
 }
+

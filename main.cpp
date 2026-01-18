@@ -4,8 +4,8 @@
 #include <vector>
 #include <list>
 #include <string>
-#include <algorithm>
 #include <cstdlib>
+#include <iostream>
 
 using namespace std;
 
@@ -51,7 +51,8 @@ public:
         int index = hashFunction(id);
         vector<Item> results;
         for (auto& item : table[index]) {
-            if (item.id == id) results.push_back(item);
+            if (item.id == id)
+                results.push_back(item);
         }
         return results;
     }
@@ -62,14 +63,27 @@ HashTable tracker;
 int main() {
     crow::SimpleApp app;
 
+    // 🔹 Health check
     CROW_ROUTE(app, "/")([](){
-        return "Backend is running!";
+        return crow::response(200, "Backend is running!");
     });
 
-    CROW_ROUTE(app, "/add")
+    // 🔹 ADD ITEM (POST)
+    CROW_ROUTE(app, "/add").methods(crow::HTTPMethod::Post)
     ([&](const crow::request& req){
+        std::cout << "[INFO] /add called\n";
+
         auto x = crow::json::load(req.body);
-        if (!x) return crow::response(400);
+        if (!x) {
+            std::cout << "[ERROR] Invalid JSON\n";
+            return crow::response(400, R"({"error":"Invalid JSON body"})");
+        }
+
+        if (!x.has("id") || !x.has("description") || !x.has("location")
+            || !x.has("date") || !x.has("isLost")) {
+            std::cout << "[ERROR] Missing fields\n";
+            return crow::response(400, R"({"error":"Missing required fields"})");
+        }
 
         tracker.insertItem(Item(
             x["id"].i(),
@@ -79,9 +93,11 @@ int main() {
             x["isLost"].b()
         ));
 
-        return crow::response("Item added successfully");
+        std::cout << "[SUCCESS] Item added\n";
+        return crow::response(200, R"({"message":"Item added successfully"})");
     });
 
+    // 🔹 GET ALL ITEMS
     CROW_ROUTE(app, "/items")
     ([]{
         auto items = tracker.getAll();
@@ -93,32 +109,42 @@ int main() {
             result[i]["description"] = item.description;
             result[i]["location"] = item.location;
             result[i]["date"] = item.date;
-            result[i]["type"] = item.isLost ? "Lost" : "Found";
+            result[i]["isLost"] = item.isLost;
             i++;
         }
+
         return result;
     });
 
+    // 🔹 SEARCH BY ID
     CROW_ROUTE(app, "/search/<int>")
     ([](int id){
         auto results = tracker.searchById(id);
-        crow::json::wvalue result;
+        crow::json::wvalue response;
+
+        if (results.empty()) {
+            response["message"] = "No item found for given ID";
+            response["results"] = crow::json::wvalue::list();
+            return response;
+        }
 
         int i = 0;
         for (auto& item : results) {
-            result[i]["id"] = item.id;
-            result[i]["description"] = item.description;
-            result[i]["location"] = item.location;
-            result[i]["date"] = item.date;
-            result[i]["type"] = item.isLost ? "Lost" : "Found";
+            response["results"][i]["id"] = item.id;
+            response["results"][i]["description"] = item.description;
+            response["results"][i]["location"] = item.location;
+            response["results"][i]["date"] = item.date;
+            response["results"][i]["isLost"] = item.isLost;
             i++;
         }
-        return result;
+
+        return response;
     });
 
-    // ✅ SINGLE, CORRECT, CLOUD-SAFE PORT HANDLING
+    // 🔹 PORT (Cloud safe)
     const char* portEnv = std::getenv("PORT");
     int port = portEnv ? std::stoi(portEnv) : 8080;
 
+    std::cout << "[INFO] Server starting on port " << port << "\n";
     app.port(port).multithreaded().run();
 }

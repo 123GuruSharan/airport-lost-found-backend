@@ -69,33 +69,23 @@ int main() {
     });
 
     // 🔹 ADD ITEM (POST)
-    CROW_ROUTE(app, "/add").methods(crow::HTTPMethod::Post)
-    ([&](const crow::request& req){
-        std::cout << "[INFO] /add called\n";
+CROW_ROUTE(app, "/add").methods(crow::HTTPMethod::Post)
+([&](const crow::request& req){
+    auto x = crow::json::load(req.body);
+    if (!x)
+        return crow::response(400, "Invalid JSON");
 
-        auto x = crow::json::load(req.body);
-        if (!x) {
-            std::cout << "[ERROR] Invalid JSON\n";
-            return crow::response(400, R"({"error":"Invalid JSON body"})");
-        }
+    tracker.insertItem(Item(
+        x["id"].i(),
+        x["description"].s(),
+        x["location"].s(),
+        x["date"].s(),
+        x["isLost"].b()
+    ));
 
-        if (!x.has("id") || !x.has("description") || !x.has("location")
-            || !x.has("date") || !x.has("isLost")) {
-            std::cout << "[ERROR] Missing fields\n";
-            return crow::response(400, R"({"error":"Missing required fields"})");
-        }
+    return crow::response(200, "Item added successfully");
+});
 
-        tracker.insertItem(Item(
-            x["id"].i(),
-            x["description"].s(),
-            x["location"].s(),
-            x["date"].s(),
-            x["isLost"].b()
-        ));
-
-        std::cout << "[SUCCESS] Item added\n";
-        return crow::response(200, R"({"message":"Item added successfully"})");
-    });
 
     // 🔹 GET ALL ITEMS
     CROW_ROUTE(app, "/items")
@@ -148,3 +138,4 @@ int main() {
     std::cout << "[INFO] Server starting on port " << port << "\n";
     app.port(port).multithreaded().run();
 }
+

@@ -9,6 +9,7 @@
 
 using namespace std;
 
+// ===================== DATA MODEL =====================
 struct Item {
     int id;
     string description;
@@ -20,6 +21,7 @@ struct Item {
         : id(i), description(desc), location(loc), date(d), isLost(lost) {}
 };
 
+// ===================== STORAGE =====================
 class HashTable {
 private:
     static const int TABLE_SIZE = 10;
@@ -33,122 +35,114 @@ public:
     HashTable() : table(TABLE_SIZE) {}
 
     void insertItem(const Item& item) {
-        int index = hashFunction(item.id);
-        table[index].push_back(item);
+        table[hashFunction(item.id)].push_back(item);
     }
 
     vector<Item> getAll() {
         vector<Item> results;
-        for (auto& chain : table) {
-            for (auto& item : chain) {
+        for (auto& bucket : table)
+            for (auto& item : bucket)
                 results.push_back(item);
-            }
-        }
         return results;
     }
 
     vector<Item> searchById(int id) {
-        int index = hashFunction(id);
         vector<Item> results;
-        for (auto& item : table[index]) {
+        for (auto& item : table[hashFunction(id)])
             if (item.id == id)
                 results.push_back(item);
-        }
         return results;
     }
 };
 
 HashTable tracker;
 
+// ===================== MAIN =====================
 int main() {
     crow::SimpleApp app;
 
-app.before_handle([](crow::request&, crow::response& res){
-    res.add_header("Access-Control-Allow-Origin", "*");
-    res.add_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    res.add_header("Access-Control-Allow-Headers", "Content-Type");
-});
+    // ---------- GLOBAL CORS (for all routes) ----------
+    app.before_handle([](crow::request&, crow::response& res) {
+        res.add_header("Access-Control-Allow-Origin", "*");
+        res.add_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+        res.add_header("Access-Control-Allow-Headers", "Content-Type");
+    });
 
-    // 🔹 Health check
+    // ---------- HEALTH CHECK ----------
     CROW_ROUTE(app, "/")([](){
         return crow::response(200, "Backend is running!");
     });
 
-    // 🔹 ADD ITEM (POST)
-CROW_ROUTE(app, "/add").methods(
-    crow::HTTPMethod::Post,
-    crow::HTTPMethod::Options
-)
-([&](const crow::request& req){
-    if (req.method == crow::HTTPMethod::Options)
-        return crow::response(204);
+    // ---------- ADD ITEM (POST + OPTIONS) ----------
+    CROW_ROUTE(app, "/add")
+        .methods(crow::HTTPMethod::Post, crow::HTTPMethod::Options)
+    ([](const crow::request& req){
+        // CORS preflight
+        if (req.method == crow::HTTPMethod::Options) {
+            return crow::response(204);
+        }
 
-    auto x = crow::json::load(req.body);
-    if (!x)
-        return crow::response(400, "Invalid JSON");
+        auto x = crow::json::load(req.body);
+        if (!x)
+            return crow::response(400, "Invalid JSON");
 
-    tracker.insertItem(Item(
-        x["id"].i(),
-        x["description"].s(),
-        x["location"].s(),
-        x["date"].s(),
-        x["isLost"].b()
-    ));
+        if (!x.has("id") || !x.has("description") || !x.has("location")
+            || !x.has("date") || !x.has("isLost")) {
+            return crow::response(400, "Missing required fields");
+        }
 
-    return crow::response(200, "Item added successfully");
-});
+        tracker.insertItem(Item(
+            x["id"].i(),
+            x["description"].s(),
+            x["location"].s(),
+            x["date"].s(),
+            x["isLost"].b()
+        ));
 
+        return crow::response(200, "Item added successfully");
+    });
 
-    // 🔹 GET ALL ITEMS
+    // ---------- GET ALL ITEMS ----------
     CROW_ROUTE(app, "/items")
     ([]{
         auto items = tracker.getAll();
-        crow::json::wvalue result;
+        crow::json::wvalue res;
 
         int i = 0;
         for (auto& item : items) {
-            result[i]["id"] = item.id;
-            result[i]["description"] = item.description;
-            result[i]["location"] = item.location;
-            result[i]["date"] = item.date;
-            result[i]["isLost"] = item.isLost;
+            res[i]["id"] = item.id;
+            res[i]["description"] = item.description;
+            res[i]["location"] = item.location;
+            res[i]["date"] = item.date;
+            res[i]["isLost"] = item.isLost;
             i++;
         }
-
-        return result;
+        return res;
     });
 
-    // 🔹 SEARCH BY ID
+    // ---------- SEARCH BY ID ----------
     CROW_ROUTE(app, "/search/<int>")
     ([](int id){
         auto results = tracker.searchById(id);
-        crow::json::wvalue response;
-
-        if (results.empty()) {
-            response["message"] = "No item found for given ID";
-            response["results"] = crow::json::wvalue::list();
-            return response;
-        }
+        crow::json::wvalue res;
 
         int i = 0;
         for (auto& item : results) {
-            response["results"][i]["id"] = item.id;
-            response["results"][i]["description"] = item.description;
-            response["results"][i]["location"] = item.location;
-            response["results"][i]["date"] = item.date;
-            response["results"][i]["isLost"] = item.isLost;
+            res["results"][i]["id"] = item.id;
+            res["results"][i]["description"] = item.description;
+            res["results"][i]["location"] = item.location;
+            res["results"][i]["date"] = item.date;
+            res["results"][i]["isLost"] = item.isLost;
             i++;
         }
 
-        return response;
+        return res;
     });
 
-    // 🔹 PORT (Cloud safe)
+    // ---------- PORT (Railway-safe) ----------
     const char* portEnv = std::getenv("PORT");
     int port = portEnv ? std::stoi(portEnv) : 8080;
 
-    std::cout << "[INFO] Server starting on port " << port << "\n";
+    std::cout << "[INFO] Server running on port " << port << std::endl;
     app.port(port).multithreaded().run();
 }
-
-

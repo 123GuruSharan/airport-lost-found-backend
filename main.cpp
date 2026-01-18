@@ -61,34 +61,38 @@ HashTable tracker;
 int main() {
     crow::SimpleApp app;
 
-    // ---------- GLOBAL CORS (for all routes) ----------
-    app.before_handle([](crow::request&, crow::response& res) {
-        res.add_header("Access-Control-Allow-Origin", "*");
-        res.add_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-        res.add_header("Access-Control-Allow-Headers", "Content-Type");
-    });
-
     // ---------- HEALTH CHECK ----------
     CROW_ROUTE(app, "/")([](){
-        return crow::response(200, "Backend is running!");
+        return "Backend is running!";
     });
 
     // ---------- ADD ITEM (POST + OPTIONS) ----------
     CROW_ROUTE(app, "/add")
         .methods(crow::HTTPMethod::Post, crow::HTTPMethod::Options)
     ([](const crow::request& req){
-        // CORS preflight
+        crow::response res;
+        res.add_header("Access-Control-Allow-Origin", "*");
+        res.add_header("Access-Control-Allow-Methods", "POST, OPTIONS");
+        res.add_header("Access-Control-Allow-Headers", "Content-Type");
+
+        // Handle CORS preflight
         if (req.method == crow::HTTPMethod::Options) {
-            return crow::response(204);
+            res.code = 204;
+            return res;
         }
 
         auto x = crow::json::load(req.body);
-        if (!x)
-            return crow::response(400, "Invalid JSON");
+        if (!x) {
+            res.code = 400;
+            res.body = "Invalid JSON";
+            return res;
+        }
 
         if (!x.has("id") || !x.has("description") || !x.has("location")
             || !x.has("date") || !x.has("isLost")) {
-            return crow::response(400, "Missing required fields");
+            res.code = 400;
+            res.body = "Missing required fields";
+            return res;
         }
 
         tracker.insertItem(Item(
@@ -99,7 +103,9 @@ int main() {
             x["isLost"].b()
         ));
 
-        return crow::response(200, "Item added successfully");
+        res.code = 200;
+        res.body = "Item added successfully";
+        return res;
     });
 
     // ---------- GET ALL ITEMS ----------
@@ -135,14 +141,12 @@ int main() {
             res["results"][i]["isLost"] = item.isLost;
             i++;
         }
-
         return res;
     });
 
     // ---------- PORT (Railway-safe) ----------
-    const char* portEnv = std::getenv("PORT");
-    int port = portEnv ? std::stoi(portEnv) : 8080;
+    int port = getenv("PORT") ? stoi(getenv("PORT")) : 8080;
+    cout << "[INFO] Server running on port " << port << endl;
 
-    std::cout << "[INFO] Server running on port " << port << std::endl;
     app.port(port).multithreaded().run();
 }

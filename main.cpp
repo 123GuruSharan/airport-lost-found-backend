@@ -63,14 +63,26 @@ HashTable tracker;
 int main() {
     crow::SimpleApp app;
 
+app.before_handle([](crow::request&, crow::response& res){
+    res.add_header("Access-Control-Allow-Origin", "*");
+    res.add_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.add_header("Access-Control-Allow-Headers", "Content-Type");
+});
+
     // 🔹 Health check
     CROW_ROUTE(app, "/")([](){
         return crow::response(200, "Backend is running!");
     });
 
     // 🔹 ADD ITEM (POST)
-CROW_ROUTE(app, "/add").methods(crow::HTTPMethod::Post)
+CROW_ROUTE(app, "/add").methods(
+    crow::HTTPMethod::Post,
+    crow::HTTPMethod::Options
+)
 ([&](const crow::request& req){
+    if (req.method == crow::HTTPMethod::Options)
+        return crow::response(204);
+
     auto x = crow::json::load(req.body);
     if (!x)
         return crow::response(400, "Invalid JSON");
@@ -138,4 +150,5 @@ CROW_ROUTE(app, "/add").methods(crow::HTTPMethod::Post)
     std::cout << "[INFO] Server starting on port " << port << "\n";
     app.port(port).multithreaded().run();
 }
+
 
